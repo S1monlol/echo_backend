@@ -2,6 +2,11 @@ import express from 'express'
 import ChatGPTClient from '@waylaidwanderer/chatgpt-api';
 import bodyParser from 'body-parser'
 
+// var SSE = require('express-sse');
+import SSE from 'express-sse'
+
+var sse = new SSE(['ok'])
+
 const app = express();
 app.use(bodyParser.json())
 
@@ -34,6 +39,9 @@ const chatGptClient = new ChatGPTClient(OPENAI_KEY, clientOptions, cacheOptions)
 
 app.post('/chat', async (req, res) => {
     let data = req.body;
+
+    console.log(data.message)
+
     // get the latest message from the conversation
     let latestMessage = await chatGptClient.conversationsCache.get(data.conversationId)
 
@@ -45,10 +53,19 @@ app.post('/chat', async (req, res) => {
     }
     console.log(latestMessage)
 
-    const response = await chatGptClient.sendMessage(data.message, { conversationId: data.conversationId, parentMessageId: latestMessage });
-    console.log(response);
+    let finalMessage = ''
 
-    res.send(response);
+    const response = await chatGptClient.sendMessage(data.message, {
+        conversationId: data.conversationId, 
+        parentMessageId: latestMessage,
+        onProgress: (token) => {
+            finalMessage += token
+            console.log(finalMessage)
+
+            // respond incrementally with the finalMessage with fetch sse
+            sse.send(finalMessage)
+        }
+    });
 });
 
 app.post('/delete', async (req, res) => {
